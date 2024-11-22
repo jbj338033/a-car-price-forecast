@@ -1,101 +1,71 @@
-import argparse
-from car_price_model import CarPricePredictor
+from car_price_model import RegularizedCarPricePredictor
 from visualize_results import CarPriceVisualizer
 import pandas as pd
-import sys
+import numpy as np
+import argparse
 import os
-
-class CarPricePredictionSystem:
-    def __init__(self):
-        self.predictor = CarPricePredictor()
-        self.visualizer = CarPriceVisualizer()
-        
-    def run_training(self, visualize=True):
-        """모델 학습 및 시각화 실행"""
-        try:
-            print("\n=== 자동차 가격 예측 시스템 시작 ===")
-            
-            # 모델 학습
-            print("\n1. 모델 학습 시작")
-            model_metrics = self.predictor.train()
-            
-            # 랜덤 샘플 평가
-            print("\n2. 랜덤 샘플 평가")
-            results, samples = self.predictor.evaluate_random_samples(n_samples=5)
-            
-            # 시각화
-            if visualize:
-                print("\n3. 결과 시각화")
-                self.visualizer.visualize_all()
-            
-            return model_metrics, results, samples
-            
-        except Exception as e:
-            print(f"\nError in main execution: {str(e)}")
-            raise
-    
-    def predict_new_car(self, car_data):
-        """새로운 자동차 데이터에 대한 가격 예측"""
-        try:
-            print("\n=== 새로운 자동차 가격 예측 ===")
-            rf_price, gb_price = self.predictor.predict_price(car_data)
-            
-            print("\n예측 결과:")
-            print(f"RandomForest 예측 가격: £{rf_price[0]:.2f}")
-            print(f"GradientBoosting 예측 가격: £{gb_price[0]:.2f}")
-            print(f"평균 예측 가격: £{((rf_price[0] + gb_price[0]) / 2):.2f}")
-            
-            return rf_price[0], gb_price[0]
-        
-        except Exception as e:
-            print(f"\nError in prediction: {str(e)}")
-            raise
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='자동차 가격 예측 시스템')
-    parser.add_argument('--no-viz', action='store_true', help='시각화 비활성화')
-    parser.add_argument('--predict', action='store_true', help='새로운 자동차 예측 모드')
-    parser.add_argument('--input-file', type=str, help='예측할 자동차 데이터 CSV 파일')
+    parser.add_argument('--no-viz', action='store_true', 
+                       help='시각화 비활성화')
+    parser.add_argument('--predict', action='store_true',
+                       help='새로운 자동차 예측 모드')
+    parser.add_argument('--input-file', type=str,
+                       help='예측할 자동차 데이터 CSV 파일')
+    parser.add_argument('--n-samples', type=int, default=5,
+                       help='랜덤 샘플 평가 개수')
     return parser.parse_args()
 
+def save_results(results, filename='prediction_results.csv'):
+    """결과를 CSV 파일로 저장"""
+    results.to_csv(filename, index=False)
+    print(f"\n결과가 {filename}에 저장되었습니다.")
+
 def main():
-    # 명령행 인수 파싱
     args = parse_arguments()
     
-    # 시스템 초기화
-    system = CarPricePredictionSystem()
-    
     try:
-        # 모델 학습 및 시각화
-        metrics, results, samples = system.run_training(visualize=not args.no_viz)
+        # 모델 및 시각화 객체 초기화
+        predictor = RegularizedCarPricePredictor()
         
-        # 예측 모드가 활성화된 경우
+        # 모델 학습
+        print("\n=== 모델 학습 시작 ===")
+        model_metrics = predictor.train()
+        
+        # 시각화
+        if not args.no_viz:
+            print("\n=== 결과 시각화 시작 ===")
+            visualizer = CarPriceVisualizer()
+            visualizer.visualize_all()
+        
+        # 예측 모드
         if args.predict:
+            print("\n=== 예측 모드 실행 ===")
             if args.input_file and os.path.exists(args.input_file):
-                # CSV 파일에서 예측할 데이터 로드
+                # CSV 파일에서 데이터 로드
                 new_cars = pd.read_csv(args.input_file)
                 print(f"\n{len(new_cars)}개의 새로운 자동차 데이터를 불러왔습니다.")
                 
-                # 각 자동차에 대해 예측 수행
-                predictions = []
+                results_list = []
                 for idx, car in new_cars.iterrows():
                     print(f"\n자동차 {idx + 1} 예측 중...")
                     car_df = pd.DataFrame([car])
-                    rf_price, gb_price = system.predict_new_car(car_df)
+                    ridge_pred, lasso_pred, rf_pred, gb_pred, ensemble_pred = predictor.predict_price(car_df)
                     
-                    predictions.append({
-                        'car_index': idx + 1,
-                        'rf_predicted_price': rf_price,
-                        'gb_predicted_price': gb_price,
-                        'average_predicted_price': (rf_price + gb_price) / 2
+                    results_list.append({
+                        'Car_Index': idx + 1,
+                        'Ridge_Price': ridge_pred[0],
+                        'Lasso_Price': lasso_pred[0],
+                        'RandomForest_Price': rf_pred[0],
+                        'GradientBoosting_Price': gb_pred[0],
+                        'Ensemble_Price': ensemble_pred[0]
                     })
                 
-                # 예측 결과를 CSV 파일로 저장
-                predictions_df = pd.DataFrame(predictions)
-                output_file = 'predictions.csv'
-                predictions_df.to_csv(output_file, index=False)
-                print(f"\n예측 결과가 {output_file}에 저장되었습니다.")
-            
+                # 결과를 DataFrame으로 변환하고 저장
+                results_df = pd.DataFrame(results_list)
+                save_results(results_df, 'model_predictions.csv')
+                
             else:
                 # 예시 자동차 데이터로 예측
                 print("\n예시 자동차 데이터로 예측을 실행합니다.")
@@ -103,24 +73,33 @@ def main():
                     'year': [2018],
                     'mileage': [21167],
                     'engineSize': [2.0],
-                    'model': [1],
-                    'transmission': [1],
-                    'fuelType': [0],
-                    'brand': [3],
+                    'model': [1],  # 예: Focus
+                    'transmission': [1],  # 예: Manual
+                    'fuelType': [0],  # 예: Petrol
+                    'brand': [3],  # 예: Ford
                     'tax': [150],
                     'mpg': [50.4]
                 })
                 
-                system.predict_new_car(example_car)
+                ridge_pred, lasso_pred, rf_pred, gb_pred, ensemble_pred = predictor.predict_price(example_car)
+                
+                print("\n예측 결과:")
+                print(f"Ridge 예측 가격: £{ridge_pred[0]:.2f}")
+                print(f"Lasso 예측 가격: £{lasso_pred[0]:.2f}")
+                print(f"RandomForest 예측 가격: £{rf_pred[0]:.2f}")
+                print(f"GradientBoosting 예측 가격: £{gb_pred[0]:.2f}")
+                print(f"앙상블 예측 가격: £{ensemble_pred[0]:.2f}")
+        
+        # 랜덤 샘플 평가
+        print(f"\n=== {args.n_samples}개의 랜덤 샘플 평가 ===")
+        results, samples = predictor.evaluate_random_samples(n_samples=args.n_samples)
+        save_results(results, 'random_sample_results.csv')
         
         print("\n=== 프로그램 실행 완료 ===")
         
-    except KeyboardInterrupt:
-        print("\n\n프로그램이 사용자에 의해 중단되었습니다.")
-        sys.exit(0)
     except Exception as e:
         print(f"\n오류가 발생했습니다: {str(e)}")
-        sys.exit(1)
+        raise
 
 if __name__ == "__main__":
     main()

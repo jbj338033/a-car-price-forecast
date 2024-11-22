@@ -1,88 +1,85 @@
-# Car Price Prediction Project
+# 자동차 가격 예측 시스템
 
 ## 개요
 
-이 프로젝트는 자동차 데이터를 기반으로 가격을 예측하는 머신러닝 모델을 구현합니다. RandomForest와 GradientBoosting 두 가지 모델을 사용하여 예측을 수행하고, 다양한 시각화를 통해 결과를 분석합니다.
+이 프로젝트는 다양한 특성을 기반으로 자동차 가격을 예측하는 머신러닝 시스템입니다. Ridge, Lasso, RandomForest, GradientBoosting 등 여러 모델을 사용하여 앙상블 예측을 수행합니다.
 
-## 프로젝트 구조
+## 설치 방법
 
-```
-project/
-│
-├── data/                 # 데이터 파일들
-│   ├── audi.csv
-│   ├── bmw.csv
-│   └── ...
-│
-├── car_price_model.py    # 모델 학습 및 예측 코드
-├── visualize_results.py  # 결과 시각화 코드
-└── README.md            # 프로젝트 설명
-```
-
-## 필요한 라이브러리
+1. 필요한 라이브러리 설치:
 
 ```bash
-pip install pandas numpy scikit-learn matplotlib seaborn
+pip install -r requirements.txt
 ```
+
+2. 데이터 준비:
+   - data/ 폴더에 자동차 데이터 CSV 파일들을 위치시킵니다.
 
 ## 사용 방법
 
-1. 데이터 준비:
+1. 기본 실행 (학습 + 시각화):
 
-   - `data/` 폴더에 자동차 데이터 CSV 파일들을 위치시킵니다.
-
-2. 모델 학습:
-
-```python
-from car_price_model import CarPricePredictor
-
-predictor = CarPricePredictor()
-model_metrics = predictor.train()
-results, samples = predictor.evaluate_random_samples(n_samples=5)
+```bash
+python main.py
 ```
 
-3. 결과 시각화:
+2. 시각화 없이 실행:
 
-```python
-from visualize_results import CarPriceVisualizer
+```bash
+python main.py --no-viz
+```
 
-visualizer = CarPriceVisualizer()
-visualizer.visualize_all()
+3. 특정 자동차 데이터 예측:
+
+```bash
+python main.py --predict --input-file new_cars.csv
+```
+
+4. 랜덤 샘플 수 지정:
+
+```bash
+python main.py --n-samples 10
 ```
 
 ## 주요 기능
 
-### CarPricePredictor 클래스
+1. 데이터 전처리 및 특성 엔지니어링
+2. 다양한 모델 학습 및 앙상블
+3. 하이퍼파라미터 최적화
+4. 교차 검증
+5. 상세한 성능 평가
+6. 다양한 시각화
 
-- 데이터 로드 및 전처리
-- 모델 학습 및 평가
-- 랜덤 샘플에 대한 예측 성능 평가
+## 파일 구조
 
-### CarPriceVisualizer 클래스
+- car_price_model.py: 모델 구현
+- visualize_results.py: 시각화 기능
+- main.py: 메인 실행 파일
+- requirements.txt: 필요 라이브러리
+- data/: 데이터 폴더
 
-- 실제 가격과 예측 가격 비교
-- 예측 오차 분포 시각화
-- 특성 중요도 시각화
-- 가격 분포 시각화
-- 상관관계 매트릭스
-- 샘플 예측 결과 시각화
-- 연도별 가격 추이
-- 주행거리와 가격의 관계
+## 입력 데이터 형식
 
-## 시각화 결과
+예측을 위한 CSV 파일은 다음 컬럼을 포함해야 합니다:
 
-모델은 다음과 같은 다양한 시각화를 제공합니다:
+- year: 연식
+- mileage: 주행거리
+- engineSize: 엔진 크기
+- model: 모델
+- transmission: 변속기 종류
+- fuelType: 연료 종류
+- brand: 브랜드
+- tax: 세금 (선택)
+- mpg: 연비 (선택)
 
-1. 모델 예측 성능 비교
-2. 특성 중요도 분석
-3. 가격 분포 분석
-4. 브랜드별 가격 분포
-5. 연도별 가격 추이
-6. 주행거리와 가격의 관계
-7. 예측 오차 분석
+## 출력 결과
+
+1. model_predictions.csv: 새로운 데이터 예측 결과
+2. random_sample_results.csv: 랜덤 샘플 평가 결과
+3. 다양한 시각화 결과
 
 ## 참고사항
 
-- 모든 수치형 데이터는 StandardScaler를 사용하여 정규화됩니다.
-- 범주형 데이터는 LabelEncoder를 사용하여 인코딩됩니다.
+- 한글 폰트 사용을 위해 Mac OS에서는 AppleGothic 폰트를 사용합니다.
+- 모든 수치형 데이터는 자동으로 정규화됩니다.
 - 결측치는 평균값으로 대체됩니다.
