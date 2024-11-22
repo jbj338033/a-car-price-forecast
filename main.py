@@ -1,4 +1,4 @@
-from car_price_model import RegularizedCarPricePredictor
+from regularized_car_price_model import RegularizedCarPricePredictor
 from visualize_results import CarPriceVisualizer
 import pandas as pd
 import numpy as np

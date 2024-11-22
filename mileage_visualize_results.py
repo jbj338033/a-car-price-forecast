@@ -74,7 +74,7 @@ class MileageAnalysisVisualizer:
         X_plot = np.linspace(X.min(), X.max(), 100).reshape(-1, 1)
         X_plot_poly = poly.transform(X_plot)
         y_plot = model.predict(X_plot_poly)
-        plt.plot(X_plot, y_plot, 'r-', label='추세선')
+        # plt.plot(X_plot, y_plot, 'r-', label='추세선')ㄴ
         plt.legend()
         
         # 주행거리 구간별 평균 가격

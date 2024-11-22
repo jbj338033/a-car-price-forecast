@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
-from car_price_model import RegularizedCarPricePredictor
+from regularized_car_price_model import RegularizedCarPricePredictor
 import platform
 from sklearn.model_selection import learning_curve
 
@@ -13,7 +13,6 @@ class CarPriceVisualizer:
             plt.rc('font', family='AppleGothic')
         plt.rc('axes', unicode_minus=False)
         
-        plt.style.use('seaborn')
         self.predictor = RegularizedCarPricePredictor()
         self.set_style()
         
