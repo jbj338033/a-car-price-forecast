@@ -173,77 +173,103 @@ class CarPricePredictor:
         return X_train_scaled, X_test_scaled, y_train, y_test, scaler, features
 
     def train_and_evaluate_models(self, X_train, X_test, y_train, y_test, features):
-        """
-        두 가지 모델(RandomForest, GradientBoosting)을 학습하고 성능을 평가합니다.
+    """
+    두 가지 모델을 학습하고 교차검증으로 성능을 평가합니다.
+    """
+    print("\n모델 학습 및 평가 중...")
+    
+    # 교차 검증을 위한 KFold 설정
+    from sklearn.model_selection import KFold
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    
+    # RandomForest 모델 학습 및 교차 검증
+    self.rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf_cv_scores = []
+    
+    print("\nRandomForest 교차 검증 수행 중...")
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train), 1):
+        # 폴드별 데이터 분할
+        X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
+        y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
         
-        Args:
-            X_train, X_test: 학습/테스트용 입력 데이터
-            y_train, y_test: 학습/테스트용 타겟 데이터
-            features: 사용된 특성들의 목록
-        Returns:
-            model_metrics: 각 모델의 성능 지표를 담은 딕셔너리
-        """
-        print("\n모델 학습 및 평가 중...")
+        # 모델 학습
+        self.rf_model.fit(X_fold_train, y_fold_train)
+        # 검증
+        val_pred = self.rf_model.predict(X_fold_val)
+        fold_score = r2_score(y_fold_val, val_pred)
+        rf_cv_scores.append(fold_score)
+        print(f"Fold {fold} R² Score: {fold_score:.4f}")
+    
+    print(f"RandomForest 평균 교차 검증 R² Score: {np.mean(rf_cv_scores):.4f}")
+    
+    # 최종 테스트 데이터로 예측
+    rf_pred = self.rf_model.predict(X_test)
+    
+    # GradientBoosting 모델 학습 및 교차 검증
+    self.gb_model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+    gb_cv_scores = []
+    
+    print("\nGradientBoosting 교차 검증 수행 중...")
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train), 1):
+        # 폴드별 데이터 분할
+        X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
+        y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
         
-        # RandomForest 모델 학습
-        self.rf_model = RandomForestRegressor(
-            n_estimators=100,    # 트리 100개 생성
-            random_state=42      # 재현성을 위한 시드값
-        )
-        self.rf_model.fit(X_train, y_train)
-        rf_pred = self.rf_model.predict(X_test)
+        # 모델 학습
+        self.gb_model.fit(X_fold_train, y_fold_train)
+        # 검증
+        val_pred = self.gb_model.predict(X_fold_val)
+        fold_score = r2_score(y_fold_val, val_pred)
+        gb_cv_scores.append(fold_score)
+        print(f"Fold {fold} R² Score: {fold_score:.4f}")
+    
+    print(f"GradientBoosting 평균 교차 검증 R² Score: {np.mean(gb_cv_scores):.4f}")
+    
+    # 최종 테스트 데이터로 예측
+    gb_pred = self.gb_model.predict(X_test)
+    
+    # 성능 평가
+    models = {
+        'RandomForest': (self.rf_model, rf_pred, rf_cv_scores),
+        'GradientBoosting': (self.gb_model, gb_pred, gb_cv_scores)
+    }
+    
+    model_metrics = {}
+    print("\n최종 모델 성능 비교:")
+    best_model = None
+    best_score = float('-inf')
+    
+    for model_name, (model, predictions, cv_scores) in models.items():
+        mse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mse)
+        r2 = r2_score(y_test, predictions)
+        mape = mean_absolute_percentage_error(y_test, predictions)
         
-        # GradientBoosting 모델 학습
-        self.gb_model = GradientBoostingRegressor(
-            n_estimators=100,    # 트리 100개 생성
-            random_state=42      # 재현성을 위한 시드값
-        )
-        self.gb_model.fit(X_train, y_train)
-        gb_pred = self.gb_model.predict(X_test)
-        
-        # 성능 평가
-        models = {
-            'RandomForest': (self.rf_model, rf_pred),
-            'GradientBoosting': (self.gb_model, gb_pred)
+        model_metrics[model_name] = {
+            'RMSE': rmse,
+            'R2': r2,
+            'MAPE': mape,
+            'CV_Scores': cv_scores,
+            'CV_Mean': np.mean(cv_scores),
+            'CV_Std': np.std(cv_scores),
+            'Predictions': predictions,
+            'True_Values': y_test
         }
         
-        model_metrics = {}
-        print("\n모델 성능 비교:")
-        best_model = None
-        best_score = float('-inf')
+        print(f"\n{model_name} 모델:")
+        print(f"RMSE: £{rmse:.2f}")
+        print(f"R² Score: {r2:.4f}")
+        print(f"MAPE: {mape:.2%}")
+        print(f"교차 검증 R² Score: {np.mean(cv_scores):.4f} (+/- {np.std(cv_scores):.4f})")
         
-        # 각 모델의 성능 평가
-        for model_name, (model, predictions) in models.items():
-            # 평가 지표 계산
-            mse = mean_squared_error(y_test, predictions)
-            rmse = np.sqrt(mse)  # 평균 제곱근 오차
-            r2 = r2_score(y_test, predictions)  # R² 점수
-            mape = mean_absolute_percentage_error(y_test, predictions)  # 평균 절대 백분율 오차
-            
-            # 성능 지표 저장
-            model_metrics[model_name] = {
-                'RMSE': rmse,
-                'R2': r2,
-                'MAPE': mape,
-                'Predictions': predictions,
-                'True_Values': y_test
-            }
-            
-            # 결과 출력
-            print(f"\n{model_name} 모델:")
-            print(f"RMSE: £{rmse:.2f}")  # 예측 오차의 크기
-            print(f"R² Score: {r2:.4f}")  # 모델의 설명력 (1에 가까울수록 좋음)
-            print(f"MAPE: {mape:.2%}")    # 평균 오차율
-            
-            # 최고 성능 모델 기록
-            if r2 > best_score:
-                best_score = r2
-                best_model = model_name
-        
-        print(f"\n최고 성능 모델: {best_model} (R² Score: {best_score:.4f})")
-        
-        return model_metrics
-        
+        if r2 > best_score:
+            best_score = r2
+            best_model = model_name
+    
+    print(f"\n최고 성능 모델: {best_model} (R² Score: {best_score:.4f})")
+    
+    return model_metrics
+  
     def predict_price(self, new_data):
         """
         새로운 자동차 데이터의 가격을 예측합니다.
