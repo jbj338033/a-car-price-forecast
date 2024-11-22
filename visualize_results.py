@@ -1,80 +1,167 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
-from car_price_model import CarPricePredictor
-import pandas as pd
 import numpy as np
+import pandas as pd
+from car_price_model import CarPricePredictor
+import matplotlib.font_manager as fm
+import platform
 
-class CarPriceVisualizer:
+class EnhancedCarPriceVisualizer:
     def __init__(self):
+        # 한글 폰트 설정
+        if platform.system() == 'Darwin':  # macOS
+            plt.rc('font', family='AppleGothic')
+        plt.rc('axes', unicode_minus=False)  # 마이너스 기호 깨짐 방지
+        
         # plt.style.use('seaborn')
         self.predictor = CarPricePredictor()
+        self.set_style()
+        
+    def set_style(self):
+        """시각화 스타일 설정"""
+        sns.set_palette("husl")
+        plt.rcParams['figure.figsize'] = (12, 8)
+        plt.rcParams['axes.labelsize'] = 12
+        plt.rcParams['axes.titlesize'] = 14
+        plt.rcParams['xtick.labelsize'] = 10
+        plt.rcParams['ytick.labelsize'] = 10
         
     def visualize_all(self):
-        """모든 시각화를 실행하는 함수"""
-        # 모델 학습 및 메트릭스 얻기
-        model_metrics = self.predictor.train()
-        results, samples = self.predictor.evaluate_random_samples(n_samples=5)
+        """모든 시각화 실행"""
+        print("모델 학습 및 데이터 준비 중...")
+        self.model_metrics = self.predictor.train()
+        self.results, self.samples = self.predictor.evaluate_random_samples(n_samples=5)
         
-        # 각종 시각화 실행
-        self.plot_prediction_comparison(model_metrics)
-        self.plot_error_distribution(model_metrics)
-        self.plot_feature_importance()
-        self.plot_price_distribution()
-        self.plot_correlation_matrix()
-        self.plot_sample_predictions(results)
+        print("\n다양한 시각화 생성 중...")
+        self.create_basic_analysis_plots()
+        self.create_advanced_analysis_plots()
+        self.create_model_performance_plots()
+        self.create_relationship_plots()
+        self.create_distribution_plots()
         
         plt.show()
     
-    def plot_prediction_comparison(self, model_metrics):
-        """실제 가격과 예측 가격 비교 그래프"""
-        plt.figure(figsize=(12, 5))
+    def create_basic_analysis_plots(self):
+        """기본 데이터 분석 시각화"""
+        # 1. 브랜드별 평균 가격
+        plt.figure(figsize=(15, 6))
+        brand_avg = self.predictor.processed_df.groupby('brand')['price'].mean().sort_values(ascending=False)
+        sns.barplot(x=brand_avg.index, y=brand_avg.values)
+        plt.title('브랜드별 평균 가격')
+        plt.xticks(rotation=45)
+        plt.xlabel('브랜드')
+        plt.ylabel('평균 가격 (£)')
+        plt.tight_layout()
         
+        # 2. 연도별 가격 트렌드
+        plt.figure(figsize=(15, 6))
+        year_avg = self.predictor.processed_df.groupby('year')['price'].agg(['mean', 'min', 'max'])
+        plt.fill_between(year_avg.index, year_avg['min'], year_avg['max'], alpha=0.2)
+        plt.plot(year_avg.index, year_avg['mean'], marker='o')
+        plt.title('연도별 가격 추이')
+        plt.xlabel('연도')
+        plt.ylabel('가격 (£)')
+        plt.legend(['평균 가격', '가격 범위'])
+        plt.tight_layout()
+        
+        # 3. 엔진 크기별 분포
+        plt.figure(figsize=(15, 6))
         plt.subplot(1, 2, 1)
-        plt.scatter(model_metrics['RandomForest']['True_Values'],
-                   model_metrics['RandomForest']['Predictions'],
-                   alpha=0.5)
-        plt.plot([0, max(model_metrics['RandomForest']['True_Values'])],
-                [0, max(model_metrics['RandomForest']['True_Values'])],
-                'r--')
-        plt.xlabel('Actual Price')
-        plt.ylabel('Predicted Price')
-        plt.title('RandomForest: Actual vs Predicted')
+        sns.histplot(data=self.predictor.processed_df, x='engineSize', bins=30)
+        plt.title('엔진 크기 분포')
+        plt.xlabel('엔진 크기')
+        plt.ylabel('빈도')
         
         plt.subplot(1, 2, 2)
-        plt.scatter(model_metrics['GradientBoosting']['True_Values'],
-                   model_metrics['GradientBoosting']['Predictions'],
-                   alpha=0.5)
-        plt.plot([0, max(model_metrics['GradientBoosting']['True_Values'])],
-                [0, max(model_metrics['GradientBoosting']['True_Values'])],
-                'r--')
-        plt.xlabel('Actual Price')
-        plt.ylabel('Predicted Price')
-        plt.title('GradientBoosting: Actual vs Predicted')
-        
+        sns.boxplot(data=self.predictor.processed_df, x='engineSize', y='price')
+        plt.title('엔진 크기별 가격 분포')
+        plt.xlabel('엔진 크기')
+        plt.ylabel('가격 (£)')
         plt.tight_layout()
     
-    def plot_error_distribution(self, model_metrics):
-        """예측 오차 분포 시각화"""
-        plt.figure(figsize=(12, 5))
-        
+    def create_advanced_analysis_plots(self):
+        """고급 데이터 분석 시각화"""
+        # 1. 주행거리와 가격의 관계 (산점도 + 회귀선)
+        plt.figure(figsize=(15, 6))
         plt.subplot(1, 2, 1)
-        rf_errors = model_metrics['RandomForest']['True_Values'] - model_metrics['RandomForest']['Predictions']
-        sns.histplot(rf_errors, kde=True)
-        plt.xlabel('Prediction Error')
-        plt.ylabel('Count')
-        plt.title('RandomForest Error Distribution')
+        sns.regplot(data=self.predictor.processed_df, x='mileage', y='price', scatter_kws={'alpha':0.5})
+        plt.title('주행거리와 가격의 관계')
+        plt.xlabel('주행거리')
+        plt.ylabel('가격 (£)')
         
         plt.subplot(1, 2, 2)
-        gb_errors = model_metrics['GradientBoosting']['True_Values'] - model_metrics['GradientBoosting']['Predictions']
-        sns.histplot(gb_errors, kde=True)
-        plt.xlabel('Prediction Error')
-        plt.ylabel('Count')
-        plt.title('GradientBoosting Error Distribution')
-        
+        sns.regplot(data=self.predictor.processed_df, x='year', y='price', scatter_kws={'alpha':0.5})
+        plt.title('연식과 가격의 관계')
+        plt.xlabel('연도')
+        plt.ylabel('가격 (£)')
         plt.tight_layout()
+        
+        # 2. 연료 타입별 가격 분포
+        plt.figure(figsize=(15, 6))
+        plt.subplot(1, 2, 1)
+        sns.violinplot(data=self.predictor.processed_df, x='fuelType', y='price')
+        plt.title('연료 타입별 가격 분포')
+        plt.xlabel('연료 타입')
+        plt.ylabel('가격 (£)')
+        
+        plt.subplot(1, 2, 2)
+        sns.boxenplot(data=self.predictor.processed_df, x='transmission', y='price')
+        plt.title('변속기 종류별 가격 분포')
+        plt.xlabel('변속기 종류')
+        plt.ylabel('가격 (£)')
+        plt.tight_layout()
+        
+        # 3. MPG와 가격의 관계
+        if 'mpg' in self.predictor.processed_df.columns:
+            plt.figure(figsize=(15, 6))
+            sns.jointplot(data=self.predictor.processed_df, x='mpg', y='price', 
+                         kind='hex', height=10)
+            plt.suptitle('MPG와 가격의 결합 분포', y=1.02)
+            plt.tight_layout()
     
-    def plot_feature_importance(self):
-        """특성 중요도 시각화"""
+    def create_model_performance_plots(self):
+        """모델 성능 관련 시각화"""
+        # 1. 예측값과 실제값 비교
+        plt.figure(figsize=(15, 6))
+        
+        plt.subplot(1, 2, 1)
+        rf_true = self.model_metrics['RandomForest']['True_Values']
+        rf_pred = self.model_metrics['RandomForest']['Predictions']
+        plt.scatter(rf_true, rf_pred, alpha=0.5)
+        plt.plot([min(rf_true), max(rf_true)], [min(rf_true), max(rf_true)], 'r--')
+        plt.title('RandomForest: 실제 가격 vs 예측 가격')
+        plt.xlabel('실제 가격 (£)')
+        plt.ylabel('예측 가격 (£)')
+        
+        plt.subplot(1, 2, 2)
+        gb_true = self.model_metrics['GradientBoosting']['True_Values']
+        gb_pred = self.model_metrics['GradientBoosting']['Predictions']
+        plt.scatter(gb_true, gb_pred, alpha=0.5)
+        plt.plot([min(gb_true), max(gb_true)], [min(gb_true), max(gb_true)], 'r--')
+        plt.title('GradientBoosting: 실제 가격 vs 예측 가격')
+        plt.xlabel('실제 가격 (£)')
+        plt.ylabel('예측 가격 (£)')
+        plt.tight_layout()
+        
+        # 2. 잔차 분석
+        plt.figure(figsize=(15, 6))
+        
+        plt.subplot(1, 2, 1)
+        rf_residuals = rf_true - rf_pred
+        sns.histplot(rf_residuals, kde=True)
+        plt.title('RandomForest 잔차 분포')
+        plt.xlabel('잔차')
+        plt.ylabel('빈도')
+        
+        plt.subplot(1, 2, 2)
+        gb_residuals = gb_true - gb_pred
+        sns.histplot(gb_residuals, kde=True)
+        plt.title('GradientBoosting 잔차 분포')
+        plt.xlabel('잔차')
+        plt.ylabel('빈도')
+        plt.tight_layout()
+        
+        # 3. 특성 중요도 비교
         rf_importance = pd.DataFrame({
             'feature': self.predictor.features,
             'importance': self.predictor.rf_model.feature_importances_
@@ -85,125 +172,77 @@ class CarPriceVisualizer:
             'importance': self.predictor.gb_model.feature_importances_
         }).sort_values('importance', ascending=True)
         
-        plt.figure(figsize=(12, 5))
-        
-        plt.subplot(1, 2, 2)
-        plt.barh(gb_importance['feature'], gb_importance['importance'])
-        plt.xlabel('Importance')
-        plt.title('GradientBoosting Feature Importance')
-        
-        plt.tight_layout()
-    
-    def plot_price_distribution(self):
-        """가격 분포 시각화"""
-        plt.figure(figsize=(12, 5))
+        plt.figure(figsize=(15, 6))
         
         plt.subplot(1, 2, 1)
-        sns.histplot(data=self.predictor.processed_df, x='price', kde=True)
-        plt.xlabel('Price')
-        plt.ylabel('Count')
-        plt.title('Price Distribution')
+        sns.barplot(data=rf_importance, x='importance', y='feature')
+        plt.title('RandomForest 특성 중요도')
+        plt.xlabel('중요도')
         
         plt.subplot(1, 2, 2)
-        sns.boxplot(data=self.predictor.processed_df, x='brand', y='price')
-        plt.xticks(rotation=45)
-        plt.xlabel('Brand')
-        plt.ylabel('Price')
-        plt.title('Price Distribution by Brand')
-        
+        sns.barplot(data=gb_importance, x='importance', y='feature')
+        plt.title('GradientBoosting 특성 중요도')
+        plt.xlabel('중요도')
         plt.tight_layout()
     
-    def plot_correlation_matrix(self):
-        """특성 간 상관관계 시각화"""
+    def create_relationship_plots(self):
+        """변수 간 관계 시각화"""
+        # 1. 상관관계 히트맵
+        plt.figure(figsize=(12, 10))
         numeric_cols = self.predictor.processed_df.select_dtypes(include=[np.number]).columns
         corr_matrix = self.predictor.processed_df[numeric_cols].corr()
-        
-        plt.figure(figsize=(10, 8))
         sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0)
-        plt.title('Feature Correlation Matrix')
+        plt.title('특성 간 상관관계')
+        plt.tight_layout()
+        
+        # 2. 페어플롯 (주요 변수들만)
+        main_features = ['price', 'year', 'mileage', 'engineSize']
+        if 'mpg' in self.predictor.processed_df.columns:
+            main_features.append('mpg')
+        sns.pairplot(self.predictor.processed_df[main_features], 
+                    diag_kind='kde', plot_kws={'alpha': 0.6})
+        plt.suptitle('주요 특성들의 페어플롯', y=1.02)
         plt.tight_layout()
     
-    def plot_sample_predictions(self, results):
-        """랜덤 샘플의 예측 결과 시각화"""
-        plt.figure(figsize=(12, 5))
-        
-        # 실제 가격과 예측 가격 비교 그래프
-        width = 0.25
-        x = np.arange(len(results))
-        
+    def create_distribution_plots(self):
+        """분포 분석 시각화"""
+        # 1. 가격 분포 분석
+        plt.figure(figsize=(15, 6))
         plt.subplot(1, 2, 1)
-        plt.bar(x - width, results['Actual_Price'], width, label='Actual')
-        plt.bar(x, results['RF_Predicted'], width, label='RandomForest')
-        plt.bar(x + width, results['GB_Predicted'], width, label='GradientBoosting')
-        plt.xlabel('Sample Index')
-        plt.ylabel('Price')
-        plt.title('Price Comparison for Random Samples')
-        plt.legend()
+        sns.histplot(data=self.predictor.processed_df, x='price', kde=True)
+        plt.title('가격 분포')
+        plt.xlabel('가격 (£)')
+        plt.ylabel('빈도')
         
-        # 예측 오차율 비교 그래프
         plt.subplot(1, 2, 2)
-        plt.bar(x - width/2, results['RF_Error_Percentage'], width, label='RandomForest')
-        plt.bar(x + width/2, results['GB_Error_Percentage'], width, label='GradientBoosting')
-        plt.xlabel('Sample Index')
-        plt.ylabel('Error Percentage')
-        plt.title('Prediction Error Percentage')
-        plt.legend()
-        
+        sns.histplot(data=self.predictor.processed_df, x=np.log1p(self.predictor.processed_df['price']), kde=True)
+        plt.title('로그 변환된 가격 분포')
+        plt.xlabel('로그 가격')
+        plt.ylabel('빈도')
         plt.tight_layout()
-
-    def plot_price_trends(self):
-        """연도별 가격 추이 시각화"""
-        plt.figure(figsize=(12, 5))
         
-        plt.subplot(1, 2, 1)
-        year_price = self.predictor.processed_df.groupby('year')['price'].mean()
-        plt.plot(year_price.index, year_price.values)
-        plt.xlabel('Year')
-        plt.ylabel('Average Price')
-        plt.title('Average Price by Year')
-        
-        plt.subplot(1, 2, 2)
-        sns.boxplot(data=self.predictor.processed_df, x='year', y='price')
+        # 2. 브랜드별 가격 분포 변화
+        plt.figure(figsize=(15, 8))
+        sns.violinplot(data=self.predictor.processed_df, x='brand', y='price')
+        plt.title('브랜드별 가격 분포')
         plt.xticks(rotation=45)
-        plt.xlabel('Year')
-        plt.ylabel('Price')
-        plt.title('Price Distribution by Year')
-        
+        plt.xlabel('브랜드')
+        plt.ylabel('가격 (£)')
         plt.tight_layout()
-
-    def plot_mileage_price_relationship(self):
-        """주행거리와 가격의 관계 시각화"""
-        plt.figure(figsize=(12, 5))
         
-        plt.subplot(1, 2, 1)
-        plt.scatter(self.predictor.processed_df['mileage'], 
-                   self.predictor.processed_df['price'],
-                   alpha=0.5)
-        plt.xlabel('Mileage')
-        plt.ylabel('Price')
-        plt.title('Price vs Mileage')
-        
-        plt.subplot(1, 2, 2)
-        sns.boxplot(data=self.predictor.processed_df, 
-                   x='fuelType', 
-                   y='price')
+        # 3. 연도별-브랜드별 가격 변화
+        plt.figure(figsize=(15, 8))
+        sns.boxplot(data=self.predictor.processed_df, x='year', y='price', hue='brand')
+        plt.title('연도 및 브랜드별 가격 분포')
         plt.xticks(rotation=45)
-        plt.xlabel('Fuel Type')
-        plt.ylabel('Price')
-        plt.title('Price Distribution by Fuel Type')
-        
+        plt.xlabel('연도')
+        plt.ylabel('가격 (£)')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
 
 def main():
-    visualizer = CarPriceVisualizer()
+    visualizer = EnhancedCarPriceVisualizer()
     visualizer.visualize_all()
-    
-    # 추가 시각화
-    visualizer.plot_price_trends()
-    visualizer.plot_mileage_price_relationship()
-    
-    # 모든 그래프 표시
-    plt.show()
 
 if __name__ == "__main__":
     main()
