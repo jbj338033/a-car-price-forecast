@@ -1,176 +1,126 @@
+import argparse
+from car_price_model import CarPricePredictor
+from visualize_results import CarPriceVisualizer
 import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-import warnings
-warnings.filterwarnings('ignore')
+import sys
+import os
 
-# 1. 데이터 로드 및 통합 (이전과 동일)
-def load_and_combine_data():
-    files = ['audi.csv', 'bmw.csv', 'cclass.csv', 'focus.csv', 'ford.csv', 
-             'hyundi.csv', 'merc.csv', 'skoda.csv', 'toyota.csv', 'vauxhall.csv', 'vw.csv']
-    
-    dataframes = []
-    for file in files:
+class CarPricePredictionSystem:
+    def __init__(self):
+        self.predictor = CarPricePredictor()
+        self.visualizer = CarPriceVisualizer()
+        
+    def run_training(self, visualize=True):
+        """모델 학습 및 시각화 실행"""
         try:
-            df = pd.read_csv(f'data/{file}')
-            print(f"Successfully loaded {file} with {len(df)} rows")
-            df['brand'] = file.split('.')[0]
-            dataframes.append(df)
+            print("\n=== 자동차 가격 예측 시스템 시작 ===")
+            
+            # 모델 학습
+            print("\n1. 모델 학습 시작")
+            model_metrics = self.predictor.train()
+            
+            # 랜덤 샘플 평가
+            print("\n2. 랜덤 샘플 평가")
+            results, samples = self.predictor.evaluate_random_samples(n_samples=5)
+            
+            # 시각화
+            if visualize:
+                print("\n3. 결과 시각화")
+                self.visualizer.visualize_all()
+            
+            return model_metrics, results, samples
+            
         except Exception as e:
-            print(f"Error loading {file}: {str(e)}")
+            print(f"\nError in main execution: {str(e)}")
+            raise
     
-    combined_df = pd.concat(dataframes, ignore_index=True)
-    print(f"\nTotal combined rows: {len(combined_df)}")
-    return combined_df
+    def predict_new_car(self, car_data):
+        """새로운 자동차 데이터에 대한 가격 예측"""
+        try:
+            print("\n=== 새로운 자동차 가격 예측 ===")
+            rf_price, gb_price = self.predictor.predict_price(car_data)
+            
+            print("\n예측 결과:")
+            print(f"RandomForest 예측 가격: £{rf_price[0]:.2f}")
+            print(f"GradientBoosting 예측 가격: £{gb_price[0]:.2f}")
+            print(f"평균 예측 가격: £{((rf_price[0] + gb_price[0]) / 2):.2f}")
+            
+            return rf_price[0], gb_price[0]
+        
+        except Exception as e:
+            print(f"\nError in prediction: {str(e)}")
+            raise
 
-# 2. 데이터 전처리 (이전과 동일)
-def preprocess_data(df):
-    print("\nStarting data preprocessing...")
-    print(f"Initial shape: {df.shape}")
-    
-    essential_columns = ['model', 'year', 'price', 'transmission', 'mileage', 'fuelType', 'engineSize', 'brand']
-    if 'tax' in df.columns:
-        essential_columns.append('tax')
-    if 'mpg' in df.columns:
-        essential_columns.append('mpg')
-    
-    df = df[essential_columns]
-    
-    if 'tax(£)' in df.columns:
-        df = df.drop('tax(£)', axis=1)
-    
-    if df['price'].dtype == 'object':
-        df['price'] = df['price'].str.replace('£', '', regex=False)\
-                                .str.replace(',', '', regex=False)\
-                                .str.replace(' ', '', regex=False)
-        df['price'] = pd.to_numeric(df['price'], errors='coerce')
-    
-    if df['mileage'].dtype == 'object':
-        df['mileage'] = df['mileage'].str.replace(',', '', regex=False)
-        df['mileage'] = pd.to_numeric(df['mileage'], errors='coerce')
-    
-    if df['engineSize'].dtype == 'object':
-        df['engineSize'] = pd.to_numeric(df['engineSize'], errors='coerce')
-    
-    le = LabelEncoder()
-    categorical_columns = ['model', 'transmission', 'fuelType', 'brand']
-    
-    for col in categorical_columns:
-        if col in df.columns:
-            df[col] = le.fit_transform(df[col].astype(str))
-    
-    if 'tax' in df.columns:
-        df['tax'] = df['tax'].fillna(df['tax'].mean())
-    if 'mpg' in df.columns:
-        df['mpg'] = df['mpg'].fillna(df['mpg'].mean())
-    
-    df = df.dropna(subset=['model', 'year', 'price', 'transmission', 'mileage', 'fuelType', 'engineSize'])
-    
-    print(f"Final shape after cleaning: {df.shape}")
-    print("\nData summary after preprocessing:")
-    print(df.describe())
-    
-    return df
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='자동차 가격 예측 시스템')
+    parser.add_argument('--no-viz', action='store_true', help='시각화 비활성화')
+    parser.add_argument('--predict', action='store_true', help='새로운 자동차 예측 모드')
+    parser.add_argument('--input-file', type=str, help='예측할 자동차 데이터 CSV 파일')
+    return parser.parse_args()
 
-# 3. 특성 선택 및 스케일링 (이전과 동일)
-def prepare_features(df):
-    print("\nPreparing features...")
-    
-    features = ['year', 'mileage', 'engineSize', 'model', 'transmission', 'fuelType', 'brand']
-    if 'tax' in df.columns:
-        features.append('tax')
-    if 'mpg' in df.columns:
-        features.append('mpg')
-    
-    print(f"Selected features: {features}")
-    
-    X = df[features]
-    y = df['price']
-    
-    print(f"Feature matrix shape: {X.shape}")
-    print(f"Target vector shape: {y.shape}")
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    return X_train_scaled, X_test_scaled, y_train, y_test, scaler, features
-
-# 4. 모델 학습 및 평가 (수정됨)
-def train_and_evaluate_model(X_train, X_test, y_train, y_test, features):
-    print("\nTraining model...")
-    
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-    
-    y_pred = model.predict(X_test)
-    
-    mse = mean_squared_error(y_test, y_pred)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(y_test, y_pred)
-    
-    print(f"\n모델 성능 평가:")
-    print(f"RMSE: £{rmse:.2f}")
-    print(f"R² Score: {r2:.4f}")
-    
-    feature_importance = pd.DataFrame({
-        'feature': features,
-        'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    
-    print("\n특성 중요도:")
-    print(feature_importance)
-    
-    return model
-
-# 5. 새로운 데이터에 대한 예측 함수 (이전과 동일)
-def predict_price(model, scaler, features, new_data):
-    new_data_scaled = scaler.transform(new_data[features])
-    predicted_price = model.predict(new_data_scaled)
-    return predicted_price
-
-# 메인 실행 함수 (수정됨)
 def main():
+    # 명령행 인수 파싱
+    args = parse_arguments()
+    
+    # 시스템 초기화
+    system = CarPricePredictionSystem()
+    
     try:
-        print("데이터 로드 중...")
-        combined_df = load_and_combine_data()
+        # 모델 학습 및 시각화
+        metrics, results, samples = system.run_training(visualize=not args.no_viz)
         
-        print("데이터 전처리 중...")
-        processed_df = preprocess_data(combined_df)
+        # 예측 모드가 활성화된 경우
+        if args.predict:
+            if args.input_file and os.path.exists(args.input_file):
+                # CSV 파일에서 예측할 데이터 로드
+                new_cars = pd.read_csv(args.input_file)
+                print(f"\n{len(new_cars)}개의 새로운 자동차 데이터를 불러왔습니다.")
+                
+                # 각 자동차에 대해 예측 수행
+                predictions = []
+                for idx, car in new_cars.iterrows():
+                    print(f"\n자동차 {idx + 1} 예측 중...")
+                    car_df = pd.DataFrame([car])
+                    rf_price, gb_price = system.predict_new_car(car_df)
+                    
+                    predictions.append({
+                        'car_index': idx + 1,
+                        'rf_predicted_price': rf_price,
+                        'gb_predicted_price': gb_price,
+                        'average_predicted_price': (rf_price + gb_price) / 2
+                    })
+                
+                # 예측 결과를 CSV 파일로 저장
+                predictions_df = pd.DataFrame(predictions)
+                output_file = 'predictions.csv'
+                predictions_df.to_csv(output_file, index=False)
+                print(f"\n예측 결과가 {output_file}에 저장되었습니다.")
+            
+            else:
+                # 예시 자동차 데이터로 예측
+                print("\n예시 자동차 데이터로 예측을 실행합니다.")
+                example_car = pd.DataFrame({
+                    'year': [2018],
+                    'mileage': [21167],
+                    'engineSize': [2.0],
+                    'model': [1],
+                    'transmission': [1],
+                    'fuelType': [0],
+                    'brand': [3],
+                    'tax': [150],
+                    'mpg': [50.4]
+                })
+                
+                system.predict_new_car(example_car)
         
-        print("특성 준비 중...")
-        X_train, X_test, y_train, y_test, scaler, features = prepare_features(processed_df)
+        print("\n=== 프로그램 실행 완료 ===")
         
-        print("모델 학습 중...")
-        model = train_and_evaluate_model(X_train, X_test, y_train, y_test, features)
-        
-        return model, scaler, features, processed_df
-        
+    except KeyboardInterrupt:
+        print("\n\n프로그램이 사용자에 의해 중단되었습니다.")
+        sys.exit(0)
     except Exception as e:
-        print(f"Error in main execution: {str(e)}")
-        raise
+        print(f"\n오류가 발생했습니다: {str(e)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    model, scaler, features, processed_df = main()
-    
-    # 예측 예시
-    print("\n예측 테스트:")
-    new_car = pd.DataFrame({
-        'year': [2018],
-        'mileage': [21167],
-        'engineSize': [2.0],
-        'model': [1],  # Focus
-        'transmission': [1],  # Manual
-        'fuelType': [0],  # Diesel
-        'brand': [3],  # focus.csv
-        'tax': [150],  # 평균적인 값 사용
-        'mpg': [50.4]  # 평균적인 값 사용
-    })
-
-    predicted_price = predict_price(model, scaler, features, new_car)
-    print(f"예측 가격: £{predicted_price[0]:.2f}")
+    main()
